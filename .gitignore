@@ -1,0 +1,18 @@
+# ROS 2 Derleme ve Kurulum Klasörleri
+build/
+install/
+log/
+
+# Python Gizli Dosyaları
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# İşletim Sistemi ve IDE Dosyaları
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*~

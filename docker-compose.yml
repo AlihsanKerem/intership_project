@@ -1,0 +1,25 @@
+
+services:
+  internship_project_node:
+    build: .
+    container_name: internship_project_container
+    # Kendi Windows'undaki src klasörünü, container içindeki /project_ws/src klasörüne bağlıyoruz
+    volumes:
+      - ./src:/project_ws/src
+    # Host ağı kullanarak ROS 2 DDS iletişimindeki gecikmeleri ve kısıtlamaları önlüyoruz
+    network_mode: "host"
+    environment:
+      # Windows'taki X11 sunucusuna görüntü aktarımı için kritik ayar
+      - DISPLAY=host.docker.internal:0
+      - LIBGL_ALWAYS_INDIRECT=0
+      - ROS_DOMAIN_ID=0
+    # Container'ın hemen kapanmaması için sonsuz bir döngüde bekletiyoruz
+    command: tail -f /dev/null
+    
+    deploy:
+       resources:
+         reservations:
+           devices:
+             - driver: nvidia
+               count: 1
+               capabilities: [gpu]
