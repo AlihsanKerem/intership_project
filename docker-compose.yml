@@ -6,6 +6,9 @@ services:
     # Kendi Windows'undaki src klasörünü, container içindeki /project_ws/src klasörüne bağlıyoruz
     volumes:
       - ./src:/project_ws/src
+      - ros2_build:/project_ws/build
+      - ros2_install:/project_ws/install
+      - ros2_log:/project_ws/log
     # Host ağı kullanarak ROS 2 DDS iletişimindeki gecikmeleri ve kısıtlamaları önlüyoruz
     network_mode: "host"
     environment:
@@ -13,6 +16,9 @@ services:
       - DISPLAY=host.docker.internal:0
       - LIBGL_ALWAYS_INDIRECT=0
       - ROS_DOMAIN_ID=0
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
     # Container'ın hemen kapanmaması için sonsuz bir döngüde bekletiyoruz
     command: tail -f /dev/null
     
@@ -23,3 +29,8 @@ services:
              - driver: nvidia
                count: 1
                capabilities: [gpu]
+
+volumes:
+  ros2_build:
+  ros2_install:
+  ros2_log:

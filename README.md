@@ -14,3 +14,11 @@ Docker'ı başlatmak
 
 Açık olan Docker'ları kapatmak için
 * docker compose down
+
+# Yapılacaklar
+
+[X] Robotların temel bir modeli
+[] Gazebo ortamını oluşturmak
+[] Robotların hareketini basitçe yapabilmek
+[] Algoritmaları düzgünce yazmak
+
