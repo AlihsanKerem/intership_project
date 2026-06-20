@@ -1,5 +1,5 @@
 # Projenin Amacı
-
+Birden fazla robotun çevresinde gördükleri nesneleri algılayarak hepsinin sahip olduğu ortak bir dünya haritası oluşturmak. 
 # Klasörü Yapısı
 
 # Docker Başlatma
