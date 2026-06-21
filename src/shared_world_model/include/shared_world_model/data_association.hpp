@@ -64,15 +64,6 @@ public:
         std::vector<int> assignment;
         // Hungarian.Solve(cost_matrix, assignment); 
 
-        // --- GÖREV BAŞLANGICI ---
-        // Senden "matched_indices" ve "unmatched_map_objs" listelerini dolduran bir döngü yazmanı istiyorum.
-        // assignment vektörünün boyutu num_map_objs kadardır.
-        // i=0'dan başlayıp num_map_objs'a kadar dönen bir for döngüsü yaz.
-        // Eğer assignment[i] değeri 0 veya daha büyükse (ve o hücredeki cost 1e9'dan küçükse) -> matched_indices'e ekle
-        // Eğer assignment[i] değeri -1 ise -> unmatched_map_objs'e ekle
-        // (std::vector'e eleman eklemek için -> liste_adi.push_back(eleman); kullanılır)
-
-        // KODUNU BURAYA YAZ:
 
         for (int i = 0; i < num_map_objs; i++) {
             int j = assignment[i];
@@ -84,9 +75,6 @@ public:
             }
         }
 
-
-
-        // --- GÖREV BİTİŞİ ---
 
 
     }
