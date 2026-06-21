@@ -30,6 +30,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'teleop_wasd = robots.teleop_wasd:main',
         ],
     },
 )
