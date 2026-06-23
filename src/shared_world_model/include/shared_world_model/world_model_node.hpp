@@ -25,12 +25,11 @@ public:
     void processMeasurements(const std::vector<TrackedObject>& incoming_measurements)
     {
         // 1. VERİ İLİŞKİLENDİRME (Data Association)
-        // Senin yazdığın associate fonksiyonunu hayal et (şu an pseudo-kod mantığında)
         // matched_pairs -> Bize hangi harita objesinin hangi sensör objesiyle eşleştiğini verir.
         std::vector<std::pair<int, int>> matched_pairs; 
         std::vector<int> new_measurement_indices; 
         
-        // DataAssociation::associate(map_objects_, incoming_measurements, 5.0, matched_pairs, new_measurement_indices);
+        DataAssociation::associate(map_objects_, incoming_measurements, 5.0, matched_pairs, new_measurement_indices);
 
         // 2. KOVARYANS KESİŞİMİ (Covariance Intersection) - Eşleşenler için
         for (auto& pair : matched_pairs) {

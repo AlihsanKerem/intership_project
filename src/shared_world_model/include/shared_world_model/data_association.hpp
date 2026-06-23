@@ -2,6 +2,7 @@
 #define SHARED_WORLD_MODEL__DATA_ASSOCIATION_HPP_
 
 #include "shared_world_model/types.hpp"
+#include "shared_world_model/hungarian.hpp"
 #include <cmath> // sqrt işlemi için
 
 namespace shared_world_model
@@ -33,7 +34,9 @@ public:
     static void associate(
         const std::vector<TrackedObject>& map_objects,
         const std::vector<TrackedObject>& measurements,
-        double max_allowed_distance) // Eşik değeri: Bu mesafeden uzaksa kesinlikle aynı obje değildir.
+        double max_allowed_distance, // Eşik değeri: Bu mesafeden uzaksa kesinlikle aynı obje değildir.
+        std::vector<std::pair<int, int>>& matched_indices,
+        std::vector<int>& new_measurement_indices)  
     {
         int num_map_objs = map_objects.size();
         int num_measurements = measurements.size();
@@ -50,11 +53,6 @@ public:
             }
         }
 
-        // Döngü bitti ve cost_matrix hazır.
-
-        // Eşleşmeleri tutacağımız listeler (Geri döndüreceğimiz sonuçlar)
-        std::vector<std::pair<int, int>> matched_indices; // (harita_index, olcum_index)
-        std::vector<int> unmatched_measurements; // Yeni objeler
         std::vector<int> unmatched_map_objs;     // Görülemeyen/Eski objeler
 
         // (Varsayımsal bir Macar algoritması çözücüsü)
@@ -62,16 +60,38 @@ public:
         // Örneğin assignment[0] = 2 demek -> 0. harita objesi, 2. ölçüm ile eşleşti demektir.
         // Eğer assignment[0] = -1 ise -> 0. harita objesi hiçbir ölçümle EŞLEŞEMEDİ demektir.
         std::vector<int> assignment;
-        // Hungarian.Solve(cost_matrix, assignment); 
+        HungarianAlgorithm hungarian;
+        
+        // Eigen Matrisini Macar Algoritmasının anlayacağı C++ Vector'üne kopyalıyoruz
+        std::vector<std::vector<double>> std_cost_matrix(num_map_objs, std::vector<double>(num_measurements, 0.0));
+        for (int i = 0; i < num_map_objs; i++) {
+            for (int j = 0; j < num_measurements; j++) {
+                std_cost_matrix[i][j] = cost_matrix(i, j);
+            }
+        }
+        
+        // Artık çevirdiğimiz yeni matrisi (std_cost_matrix) gönderiyoruz!
+        hungarian.Solve(std_cost_matrix, assignment); 
+
+        // Hangi ölçümlerin eşleştiğini takip edelim (Yeni objeleri bulabilmek için)
+        std::vector<bool> measurement_assigned(num_measurements, false);
 
 
         for (int i = 0; i < num_map_objs; i++) {
             int j = assignment[i];
             if (j >= 0 && cost_matrix(i, j) < 1e9) {
                 matched_indices.push_back(std::make_pair(i, j));
+                measurement_assigned[j] = true;
             }
             else {
                 unmatched_map_objs.push_back(i);
+            }
+        }
+
+        // Hiçbir harita objesiyle eşleşmeyen ölçümleri Yeni Objeler sepetine atıyoruz
+        for (int j = 0; j < num_measurements; j++) {
+            if (!measurement_assigned[j]) {
+                new_measurement_indices.push_back(j);
             }
         }
 
