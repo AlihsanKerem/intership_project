@@ -16,6 +16,8 @@ setup(
         (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*.launch.py'))),
         # Xacro/URDF dosyalarını derleme dizinine kopyalamak için:
         (os.path.join('share', package_name, 'robot_designs'), glob('robot_designs/*.xacro')),
+        # Gazebo world dosyalarını derleme dizinine kopyalamak için:
+        (os.path.join('share', package_name, 'worlds'), glob('worlds/*.world')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

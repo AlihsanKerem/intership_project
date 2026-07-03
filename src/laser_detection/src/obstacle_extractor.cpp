@@ -2,6 +2,8 @@
 #include <sensor_msgs/msg/laser_scan.hpp>
 #include <vector>
 #include <cmath>
+#include "interfaces/msg/tracked_object.hpp"
+#include "interfaces/msg/tracked_object_array.hpp"
 
 struct Point2D {
     double x;
@@ -23,6 +25,7 @@ public:
             10,
             std::bind(&ObstacleExtractor::scan_callback, this, std::placeholders::_1)
         );
+        obj_pub_ = this->create_publisher<interfaces::msg::TrackedObjectArray>("/detected_obstacles", 10);
 
         RCLCPP_INFO(this->get_logger(), 
         "Obstacle Extractor Node baslatildi. ");
@@ -68,8 +71,8 @@ private:
 
             // İlk noktayı geçiyi kumeye koyuyoruz
             current_cluster.push_back(valid_points[0]); 
-            // 30 cm. Aralarında 30 cm'den az olan noktalar aynı objedir!
-            double threshold = 0.3;
+            // 50 cm. Aralarında 50 cm'den az olan noktalar aynı objedir!
+            double threshold = 0.5;
 
             for (size_t i = 1; i < valid_points.size(); i++ ) {
                 // Şimdiki nokta ile bir önceki nokta arasındaki uzaklığı (hipotenüs) hesaplıyoruz
@@ -92,6 +95,10 @@ private:
 
             // Döngü bittikten sonra elimizde kalan son objeyi de ekliyoruz
             clusters.push_back(current_cluster);
+
+            interfaces::msg::TrackedObjectArray msg_array;
+            msg_array.header.stamp = this->now();
+            msg_array.header.frame_id = "laser";
 
             int object_id = 1;
             for (const auto& cluster : clusters) {
@@ -124,6 +131,17 @@ private:
                     "Obje %d -> Merkez(X: %.2f, Y: %.2f) | Nokta Sayisi: %zu | VarX: %.4f, VarY: %.4f", 
                     object_id, mean_x, mean_y, cluster.size(), var_x, var_y);
 
+                    interfaces::msg::TrackedObject obj_msg;
+                    obj_msg.id = object_id;
+                    obj_msg.state[0] = mean_x;
+                    obj_msg.state[1] = mean_y;
+                    obj_msg.covariance[0] = var_x;   // Matrisin [0,0] elemanı
+                    obj_msg.covariance[1] = cov_xy;  // Matrisin [0,1] elemanı
+                    obj_msg.covariance[2] = cov_xy;  // Matrisin [1,0] elemanı
+                    obj_msg.covariance[3] = var_y;   // Matrisin [1,1] elemanı
+
+                    msg_array.objects.push_back(obj_msg);
+
                     object_id++;
             }
             
@@ -134,11 +152,14 @@ private:
             "Lidardan veri geldi. Toplam nokta sayisi: %zu", msg->ranges.size());
 
             RCLCPP_INFO(this->get_logger(),
-            "Lidar taranmasi bitti. %zu adet obje bulundu!", clusters.size());
+            "Lidar taranmasi bitti. %d adet obje bulundu!", (object_id-1));
+            obj_pub_->publish(msg_array);
+
         }
         
         //Subscribe olunan topic burada tanımlanıyor
         rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
+        rclcpp::Publisher<interfaces::msg::TrackedObjectArray>::SharedPtr obj_pub_;
 };
 
 // Main

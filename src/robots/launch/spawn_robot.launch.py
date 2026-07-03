@@ -26,10 +26,12 @@ def generate_launch_description():
         }]
     )
 
-    # Gazebo Boş Dünya Başlatıcı
+    # Gazebo Dünyasını Başlatıcı (test_obstacles.world)
+    world_file = os.path.join(pkg_share, 'worlds', 'test_obstacles.world')
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')]),
+        launch_arguments={'world': world_file}.items()
     )
 
     # Robotu Dünyaya Ekleme (Spawn) Node
