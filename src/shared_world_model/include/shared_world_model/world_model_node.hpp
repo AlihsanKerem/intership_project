@@ -8,6 +8,7 @@
 #include "shared_world_model/types.hpp"
 #include "shared_world_model/data_association.hpp"
 #include "shared_world_model/covariance_intersection.hpp"
+#include "interfaces/msg/tracked_object_array.hpp"
 
 namespace shared_world_model
 {
@@ -17,7 +18,11 @@ class WorldModelNode : public rclcpp::Node
 public:
     WorldModelNode() : Node("shared_world_model_node")
     {
-        // 1. ROS 2 Timer, Subscriber ve Publisher tanımlamaları buraya gelir.
+        obj_sub_ = this->create_subscription<interfaces::msg::TrackedObjectArray>(
+            "/detected_obstacles",
+            10,
+            std::bind(&WorldModelNode::obstacle_callback, this, std::placeholders::_1)
+        );
         RCLCPP_INFO(this->get_logger(), "Shared World Model Node Baslatildi!");
     }
 
@@ -54,9 +59,33 @@ public:
         RCLCPP_INFO(this->get_logger(), "Harita Guncellendi. Toplam Obje Sayisi: %zu", map_objects_.size());
     }
 
+    void obstacle_callback(const
+    interfaces::msg::TrackedObjectArray::SharedPtr msg)
+    {
+        std::vector<TrackedObject> incoming_measurements;
+
+        for(const auto& obj_msg : msg->objects)
+        {
+            Eigen::Vector2d state(obj_msg.state[0], obj_msg.state[1]);
+
+            Eigen::Matrix2d covariance;
+            covariance(0, 0) = obj_msg.covariance[0];
+            covariance(0, 1) = obj_msg.covariance[1];
+            covariance(1, 0) = obj_msg.covariance[2];
+            covariance(1, 1) = obj_msg.covariance[3];
+
+            TrackedObject obj(obj_msg.id, state, covariance);
+            incoming_measurements.push_back(obj);
+
+
+        }
+        processMeasurements(incoming_measurements);
+    }
+
 private:
     // Düğümün (Node) kendi içinde tuttuğu HAFIZASI: Küresel Haritamız
     std::vector<TrackedObject> map_objects_;
+    rclcpp::Subscription<interfaces::msg::TrackedObjectArray>::SharedPtr obj_sub_;
 };
 
 } // namespace shared_world_model

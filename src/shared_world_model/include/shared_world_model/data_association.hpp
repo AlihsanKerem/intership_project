@@ -16,13 +16,16 @@ public:
         const TrackedObject& map_obj, 
         const TrackedObject& measurement)
     {
-        // 1. Pozisyon farkı vektörü (z - x)
+        // Pozisyon farkı vektörü (z - x)
         Vector2d diff = measurement.state - map_obj.state;
 
-        // 2. İnovasyon Kovaryansı: S = P + R
+        // İnovasyon Kovaryansı: S = P + R
         // map_obj.covariance: Haritadaki objenin belirsizliği (P)
         // measurement.covariance: Sensör ölçümünün belirsizliği (R)
         Matrix2d S = map_obj.covariance + measurement.covariance;
+
+        S(0, 0) += 1e-4;
+        S(1, 1) += 1e-4;
         
         // Hesaplama
         double mahalanobis_distance = std::sqrt( (diff.transpose() * S.inverse() * diff).value() ); 
@@ -40,29 +43,30 @@ public:
     {
         int num_map_objs = map_objects.size();
         int num_measurements = measurements.size();
-        // Maliyet matrisini oluşturmak için Eigen'ın dinamik boyutlu matrisini kullanalım
+        
+        if(num_map_objs == 0 || num_measurements == 0) {
+             // Harita boşsa gelen tüm veriler doğrudan yeni objedir eşleştirme yapmaya gerek yok
+             for (int j = 0; j < num_measurements; j++) {
+                new_measurement_indices.push_back(j);
+             }
+             return;
+        } 
+        
         Eigen::MatrixXd cost_matrix = Eigen::MatrixXd::Constant(num_map_objs, num_measurements, 1e9); 
-        // 1e9 (çok büyük bir sayı) ile doldurduk. Eğer uzaklık max_allowed_distance'tan büyükse eşleşmesin diye maliyet devasa kalacak.
-
+        
         for (int i = 0; i < num_map_objs; i++) {
             for (int j = 0; j < num_measurements; j++) {
                 double dist = computeMahalanobisDistance(map_objects[i], measurements[j]);
-                if (dist < max_allowed_distance) {
+                // NaN değilse ve eşik değerinden küçükse maliyete yaz
+                if (!std::isnan(dist) && dist < max_allowed_distance) {
                     cost_matrix(i, j) = dist;
                 }
             }
         }
-
-        std::vector<int> unmatched_map_objs;     // Görülemeyen/Eski objeler
-
-        // (Varsayımsal bir Macar algoritması çözücüsü)
-        // assignment vektörü bize harita objelerinin hangi sensör ölçümleriyle eşleştiğini döner.
-        // Örneğin assignment[0] = 2 demek -> 0. harita objesi, 2. ölçüm ile eşleşti demektir.
-        // Eğer assignment[0] = -1 ise -> 0. harita objesi hiçbir ölçümle EŞLEŞEMEDİ demektir.
+        std::vector<int> unmatched_map_objs;
         std::vector<int> assignment;
         HungarianAlgorithm hungarian;
         
-        // Eigen Matrisini Macar Algoritmasının anlayacağı C++ Vector'üne kopyalıyoruz
         std::vector<std::vector<double>> std_cost_matrix(num_map_objs, std::vector<double>(num_measurements, 0.0));
         for (int i = 0; i < num_map_objs; i++) {
             for (int j = 0; j < num_measurements; j++) {

@@ -9,6 +9,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(interfaces REQUIRED)
 
 include_directories(
   include
@@ -18,7 +19,7 @@ include_directories(
 
 add_executable(shared_world_model_node src/main.cpp)
 
-ament_target_dependencies(shared_world_model_node rclcpp Eigen3)
+ament_target_dependencies(shared_world_model_node rclcpp Eigen3 interfaces)
 
 install(TARGETS
   shared_world_model_node
