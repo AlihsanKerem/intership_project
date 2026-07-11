@@ -23,5 +23,10 @@ Açık olan Docker'ları kapatmak için
 * [X] Algoritmaları düzgünce yazmak (denedim)
 * [X] Araçların şeklini değiştirmek gerekiyor çünkü ileri geri yapınca düşüyorlar
 * [] Birden fazla araç olmalı ve bu araçlar birbirleri ile ayırt edilebilmeli
-* [] Visualization marker eklenebilir
+* [X] Visualization marker eklenebilir
+### Algoritma testleri
+* [] Duvarların konumlarına göre duvarları engel olarak algılamamasını sağlamak
+* [] SLAM ile harita oluşturup o harita üzerinde duvarlarla kıyaslama yapıp engelleri öyle anlamak
+* [] 3D Lidar kullanarak duvarlarla engelleri birbirinden ayırmak
+* [] Birden fazla araç algoritmayı kullanıp ortak bir dünya haritası oluşturmalı yani bu algoritmayı birden fazla araçla denemeliyiz
 
