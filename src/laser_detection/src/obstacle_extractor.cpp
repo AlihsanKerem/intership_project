@@ -2,6 +2,10 @@
 #include <sensor_msgs/msg/laser_scan.hpp>
 #include <vector>
 #include <cmath>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <geometry_msgs/msg/point_stamped.hpp>
 #include "interfaces/msg/tracked_object.hpp"
 #include "interfaces/msg/tracked_object_array.hpp"
 
@@ -26,6 +30,8 @@ public:
             std::bind(&ObstacleExtractor::scan_callback, this, std::placeholders::_1)
         );
         obj_pub_ = this->create_publisher<interfaces::msg::TrackedObjectArray>("/detected_obstacles", 10);
+        tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+        tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
         RCLCPP_INFO(this->get_logger(), 
         "Obstacle Extractor Node baslatildi. ");
@@ -40,6 +46,16 @@ private:
         {
             // Polar veriyi (r, teta) Kartezyene (x, y) çevirmek
             std::vector<Point2D> valid_points;
+            geometry_msgs::msg::TransformStamped transform_stamped;
+            try {
+                transform_stamped = tf_buffer_->lookupTransform(
+                    "odom", msg->header.frame_id,
+                    msg->header.stamp,
+                    rclcpp::Duration::from_seconds(0.05)
+                );
+            } catch (const tf2::TransformException & ex) {
+                return;
+            }
             double angle = msg->angle_min;
 
             for (size_t i = 0; i < msg->ranges.size(); i++) {
@@ -47,16 +63,24 @@ private:
 
                 // Geçersiz verileri engelliyoruz
                 if (std::isinf(r) || std::isnan(r) ||
-                    r < msg->range_min || r > msg->range_max) 
+                    r < msg->range_min || r > 5.0) 
                     {
                         angle += msg->angle_increment;
                         continue;
                     }
 
                     // Formül: x = r * cos(aci), y = r * sin(aci)
+                    geometry_msgs::msg::Point pt_laser;
+                    pt_laser.x = r * std::cos(angle);
+                    pt_laser.y = r * std::sin(angle);
+                    pt_laser.z = 0.0;
+
+                    geometry_msgs::msg::Point pt_odom;
+                    tf2::doTransform(pt_laser, pt_odom, transform_stamped);
+
                     Point2D pt;
-                    pt.x = r * std::cos(angle);
-                    pt.y = r * std::sin(angle);
+                    pt.x = pt_odom.x;
+                    pt.y = pt_odom.y;
                     valid_points.push_back(pt);
 
                     // Açıyı bir sonraki nokta için artır
@@ -98,12 +122,14 @@ private:
 
             interfaces::msg::TrackedObjectArray msg_array;
             msg_array.header.stamp = this->now();
-            msg_array.header.frame_id = "laser";
+            msg_array.header.frame_id = "odom";
 
             int object_id = 1;
             for (const auto& cluster : clusters) {
                 // Çok küçük kümeleri yok sayıyoruz
                 if (cluster.size() < 5) continue;
+                // Duvarları da yok sayıyoruz
+                if (cluster.size() > 40) continue;
 
                 // Merkez hesaplama
                 double sum_x = 0, sum_y = 0;
@@ -127,9 +153,10 @@ private:
                 var_y /= (N - 1);
                 cov_xy /= (N - 1);
 
-                RCLCPP_INFO(this->get_logger(),
+                /* RCLCPP_INFO(this->get_logger(),
                     "Obje %d -> Merkez(X: %.2f, Y: %.2f) | Nokta Sayisi: %zu | VarX: %.4f, VarY: %.4f", 
                     object_id, mean_x, mean_y, cluster.size(), var_x, var_y);
+                */
 
                     interfaces::msg::TrackedObject obj_msg;
                     obj_msg.id = object_id;
@@ -160,6 +187,8 @@ private:
         //Subscribe olunan topic burada tanımlanıyor
         rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
         rclcpp::Publisher<interfaces::msg::TrackedObjectArray>::SharedPtr obj_pub_;
+        std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+        std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 };
 
 // Main

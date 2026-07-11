@@ -3,12 +3,14 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <vector>
+#include "visualization_msgs/msg/marker_array.hpp"
 
 // Senin yazdığın matematiksel algoritmalar
 #include "shared_world_model/types.hpp"
 #include "shared_world_model/data_association.hpp"
 #include "shared_world_model/covariance_intersection.hpp"
 #include "interfaces/msg/tracked_object_array.hpp"
+
 
 namespace shared_world_model
 {
@@ -23,6 +25,8 @@ public:
             10,
             std::bind(&WorldModelNode::obstacle_callback, this, std::placeholders::_1)
         );
+        marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/world_map_markers", 10);
+
         RCLCPP_INFO(this->get_logger(), "Shared World Model Node Baslatildi!");
     }
 
@@ -57,6 +61,41 @@ public:
         }
 
         RCLCPP_INFO(this->get_logger(), "Harita Guncellendi. Toplam Obje Sayisi: %zu", map_objects_.size());
+        publishMarkers();
+    }
+
+    void publishMarkers()
+    {
+        visualization_msgs::msg::MarkerArray marker_array;
+
+        for (size_t i = 0; i < map_objects_.size(); i++) {
+            visualization_msgs::msg::Marker marker;
+            marker.header.frame_id = "odom";
+            marker.header.stamp = this->now();
+            marker.ns = "tracked_objects";
+            marker.id = i;
+            marker.type = visualization_msgs::msg::Marker::CYLINDER;
+            marker.action = visualization_msgs::msg::Marker::ADD;
+
+            // Objenin konumu
+            marker.pose.position.x = map_objects_[i].state[0];
+            marker.pose.position.y = map_objects_[i].state[1];
+            marker.pose.position.z = 0.5;
+
+            // Objenin boyutu
+            marker.scale.x = 0.5;
+            marker.scale.y = 0.5;
+            marker.scale.z = 1.0,
+
+            // Objenin rengi
+            marker.color.a = 1.0;
+            marker.color.r = 1.0;
+            marker.color.g = 0.0;
+            marker.color.b = 0.0;
+
+            marker_array.markers.push_back(marker);
+        }
+        marker_pub_->publish(marker_array);
     }
 
     void obstacle_callback(const
@@ -86,6 +125,7 @@ private:
     // Düğümün (Node) kendi içinde tuttuğu HAFIZASI: Küresel Haritamız
     std::vector<TrackedObject> map_objects_;
     rclcpp::Subscription<interfaces::msg::TrackedObjectArray>::SharedPtr obj_sub_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
 };
 
 } // namespace shared_world_model

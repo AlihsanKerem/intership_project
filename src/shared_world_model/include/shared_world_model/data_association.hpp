@@ -24,8 +24,8 @@ public:
         // measurement.covariance: Sensör ölçümünün belirsizliği (R)
         Matrix2d S = map_obj.covariance + measurement.covariance;
 
-        S(0, 0) += 1e-4;
-        S(1, 1) += 1e-4;
+        S(0, 0) += 1.0;
+        S(1, 1) += 1.0;
         
         // Hesaplama
         double mahalanobis_distance = std::sqrt( (diff.transpose() * S.inverse() * diff).value() ); 
