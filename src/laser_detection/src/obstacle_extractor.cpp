@@ -78,6 +78,10 @@ private:
                     geometry_msgs::msg::Point pt_odom;
                     tf2::doTransform(pt_laser, pt_odom, transform_stamped);
 
+                    if (std::abs(pt_odom.x) > 4.5 || std::abs(pt_odom.y) > 4.5) {
+                        continue;
+                    }
+
                     Point2D pt;
                     pt.x = pt_odom.x;
                     pt.y = pt_odom.y;
@@ -153,23 +157,26 @@ private:
                 var_y /= (N - 1);
                 cov_xy /= (N - 1);
 
+                var_x += 0.01;
+                var_y += 0.01;
+
                 /* RCLCPP_INFO(this->get_logger(),
                     "Obje %d -> Merkez(X: %.2f, Y: %.2f) | Nokta Sayisi: %zu | VarX: %.4f, VarY: %.4f", 
                     object_id, mean_x, mean_y, cluster.size(), var_x, var_y);
                 */
 
-                    interfaces::msg::TrackedObject obj_msg;
-                    obj_msg.id = object_id;
-                    obj_msg.state[0] = mean_x;
-                    obj_msg.state[1] = mean_y;
-                    obj_msg.covariance[0] = var_x;   // Matrisin [0,0] elemanı
-                    obj_msg.covariance[1] = cov_xy;  // Matrisin [0,1] elemanı
-                    obj_msg.covariance[2] = cov_xy;  // Matrisin [1,0] elemanı
-                    obj_msg.covariance[3] = var_y;   // Matrisin [1,1] elemanı
+                interfaces::msg::TrackedObject obj_msg;
+                obj_msg.id = object_id;
+                obj_msg.state[0] = mean_x;
+                obj_msg.state[1] = mean_y;
+                obj_msg.covariance[0] = var_x;   // Matrisin [0,0] elemanı
+                obj_msg.covariance[1] = cov_xy;  // Matrisin [0,1] elemanı
+                obj_msg.covariance[2] = cov_xy;  // Matrisin [1,0] elemanı
+                obj_msg.covariance[3] = var_y;   // Matrisin [1,1] elemanı
 
-                    msg_array.objects.push_back(obj_msg);
+                msg_array.objects.push_back(obj_msg);
 
-                    object_id++;
+                object_id++;
             }
             
 

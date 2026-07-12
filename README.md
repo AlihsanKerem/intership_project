@@ -24,9 +24,7 @@ Açık olan Docker'ları kapatmak için
 * [X] Araçların şeklini değiştirmek gerekiyor çünkü ileri geri yapınca düşüyorlar
 * [] Birden fazla araç olmalı ve bu araçlar birbirleri ile ayırt edilebilmeli
 * [X] Visualization marker eklenebilir
-### Algoritma testleri
-* [] Duvarların konumlarına göre duvarları engel olarak algılamamasını sağlamak
-* [] SLAM ile harita oluşturup o harita üzerinde duvarlarla kıyaslama yapıp engelleri öyle anlamak
-* [] 3D Lidar kullanarak duvarlarla engelleri birbirinden ayırmak
-* [] Birden fazla araç algoritmayı kullanıp ortak bir dünya haritası oluşturmalı yani bu algoritmayı birden fazla araçla denemeliyiz
-
+### Algoritma Geliştirmeleri
+* [ ] SLAM Entegrasyonu (Statik Harita vs Dinamik Engeller): Ortamın statik bir haritasını çıkararak eğer ortamda obje varsa bunu static haritadaki duvarlarla kıyaslayarak aha bu objedir demesini sağlamak.
+* [ ] 3D Lidar (Point Cloud) ile Sensör Yükseltmesi: 2D lidarın duvar ve obje algılamadaki problemini 3. boyutu kullanarak çözmeye çalışmak. Bunun için laserscan verisinden pointcloud verisine geçicez.
+* [ ] Çoklu Robot (Multi-Agent) ile Ortak Dünya Haritası (Sensor Fusion): Birden fazla robotun tespit ettiği objeleri tek bir Haritada birleştirmek.
