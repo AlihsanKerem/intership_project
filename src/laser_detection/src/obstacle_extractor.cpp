@@ -29,7 +29,11 @@ public:
             10,
             std::bind(&ObstacleExtractor::scan_callback, this, std::placeholders::_1)
         );
-        obj_pub_ = this->create_publisher<interfaces::msg::TrackedObjectArray>("/detected_obstacles", 10);
+        obj_pub_ = this->create_publisher<interfaces::msg::TrackedObjectArray>
+        (
+            "/detected_obstacles",
+            10
+        );
         tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
