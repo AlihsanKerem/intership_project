@@ -12,7 +12,15 @@ namespace shared_world_model
 using Vector2d = Eigen::Vector2d;
 using Matrix2d = Eigen::Matrix2d;
 
-// Haritadaki ve sensördeki her bir objeyi temsil eden yapımız
+/**
+     * @struct TrackedObject
+     * @brief Sensörden tespit edilen veya haritada var olan nesneleri
+     * temsil eden temel veri yapısı.
+     * 
+     * Lidar'dan (laser_detection) gelen ölçümler ROS mesajından bu C++ yapısına 
+     * dönüştürülür. Tüm eşleştirme (Data Association) ve füzyon (CI) algoritmaları 
+     * bu yapı üzerinden matematiksel matris (Eigen) işlemleri yapar.
+     */
 struct TrackedObject
 {
     int id;               // Objeyi haritada benzersiz kılan kimlik numarası (Sensörden geliyorsa -1 olabilir)

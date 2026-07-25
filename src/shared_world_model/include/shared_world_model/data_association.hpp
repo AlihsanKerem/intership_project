@@ -8,10 +8,31 @@
 namespace shared_world_model
 {
 
+/**
+     * @class DataAssociation
+     * @brief Haritadaki mevcut nesneler ile Lidar'dan yeni gelen nesne ölçümlerini 
+     * birbirleriyle eşleştiren class.
+     * 
+     * Eşleştirme maliyeti olarak Mahalanobis Uzaklığı kullanılır. En uygun 
+     * eşleşmeyi bulmak için ise Hungarian Algoritması çalıştırılır.
+     */
 class DataAssociation
 {
 public:
-    // İki obje arasındaki Mahalanobis mesafesini hesaplar
+    /**
+     * @brief İki nesne arasındaki Mahalanobis uzaklığını hesaplar.
+     * 
+     * Klasik Öklid uzaklığından farklı olarak bu metot, sensörlerin ve haritanın 
+     * kovaryans durumunu da hesaba katar. Belirsizliğin yüksek olduğu 
+     * durumlarda nesnelerin eşleşme toleransı artar.
+     * 
+     * Formül: D = sqrt( (z - x)^T * S^-1 * (z - x) )
+     * (S = İnovasyon Kovaryansı = P + R)
+     * 
+     * @param map_obj Haritada var olan nesne
+     * @param measurement Lidar'dan yeni gelen ölçüm
+     * @return double Hesaplanmış uzaklık değeri (Maliyet)
+     */
     static double computeMahalanobisDistance(
         const TrackedObject& map_obj, 
         const TrackedObject& measurement)
@@ -24,6 +45,8 @@ public:
         // measurement.covariance: Sensör ölçümünün belirsizliği (R)
         Matrix2d S = map_obj.covariance + measurement.covariance;
 
+        // Sayısal stabilite için kovaryans matrisinin köşegenlerine küçük bir pay ekliyoruz
+        // Bu işlem, belirsizliğin sıfır olup matrisin tersinin alınamaması (Singular Matrix) hatasını önlüyor
         S(0, 0) += 1.0;
         S(1, 1) += 1.0;
         
@@ -33,7 +56,22 @@ public:
         return mahalanobis_distance;
     }
 
-    // Elimizdeki tüm ölçümler ile haritadaki tüm objeler arasında eşleştirme yapar
+    /**
+     * @brief Tüm ölçümler ile haritadaki tüm objeler arasında optimum eşleştirmeyi yapar.
+     * 
+     * Adımlar:
+     * 1. N x M boyutunda bir Cost Matrix oluşturulur.
+     * 2. Matrisin her bir hücresine o iki nesne arasındaki Mahalanobis uzaklığı yazılır.
+     *    Uzaklık eşik değerinden (max_allowed_distance) büyükse eşleşme imkansız sayılır.
+     * 3. Hungarian algoritması çalıştırılarak toplam maliyeti en aza indirecek eşleşme bulunur.
+     * 4. Eşleşmeyen (yeni) ölçümler tespit edilir.
+     * 
+     * @param map_objects Global haritadaki mevcut nesneler
+     * @param measurements Sensörden (Lidar) gelen yeni ölçümler
+     * @param max_allowed_distance Eşleşme için izin verilen maksimum Mahalanobis uzaklığı
+     * @param matched_indices Eşleşen nesnelerin indeks çiftleri (Çıktı)
+     * @param new_measurement_indices Haritadaki hiçbir nesneyle eşleşmeyen YENİ nesnelerin indeksleri (Çıktı)
+     */
     static void associate(
         const std::vector<TrackedObject>& map_objects,
         const std::vector<TrackedObject>& measurements,

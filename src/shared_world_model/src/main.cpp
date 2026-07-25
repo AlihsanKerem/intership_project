@@ -1,6 +1,13 @@
 #include <rclcpp/rclcpp.hpp>
 #include "shared_world_model/world_model_node.hpp" // Yazdığımız Node sınıfı
 
+/**
+ * @file main.cpp
+ * @brief Shared World Model paketinin ana çalıştırılabilir (executable) dosyası.
+ * 
+ * Bu dosya, ROS 2 iletişim ağını (rclcpp) başlatır ve sensör füzyonu algoritmalarını 
+ * barındıran WorldModelNode düğümünü sonsuz bir döngüde (spin) ayağa kaldırır.
+ */
 int main(int argc, char * argv[])
 {
     // ROS 2 iletişim sistemini başlat

@@ -5,7 +5,7 @@
 #include <vector>
 #include "visualization_msgs/msg/marker_array.hpp"
 
-// Senin yazdığın matematiksel algoritmalar
+// Yazdığımız matematiksel algoritmalar
 #include "shared_world_model/types.hpp"
 #include "shared_world_model/data_association.hpp"
 #include "shared_world_model/covariance_intersection.hpp"
@@ -15,9 +15,24 @@
 namespace shared_world_model
 {
 
+/**
+     * @class WorldModelNode
+     * @brief Farklı robotlardan gelen algılanmış nesne verilerini 
+     * alarak tek bir Küresel Ortak Dünya Haritasında (Shared World Model) birleştiren ROS 2 Nodeu.
+     * 
+     * Bu sınıf, Data Association (Veri İlişkilendirme) ve Covariance Intersection (Kovaryans Kesişimi)
+     * algoritmalarını yöneterek haritayı dinamik olarak günceller ve RViz üzerinde 
+     * görselleştirilmesi için Marker verileri yayınlar.
+     */
 class WorldModelNode : public rclcpp::Node
 {
 public:
+    /**
+     * @brief WorldModelNode Constructor Fonksiyonu
+     * 
+     * /detected_obstacles topiğini dinlemek üzere bir subscriber ve 
+     * /world_map_markers topiğine RViz görselleştirmesi göndermek üzere bir publisher oluşturur.
+     */
     WorldModelNode() : Node("shared_world_model_node")
     {
         obj_sub_ = this->create_subscription<interfaces::msg::TrackedObjectArray>(
@@ -31,6 +46,16 @@ public:
     }
 
     // Sensörden her yeni veri geldiğinde bu fonksiyon tetiklenecek
+    /**
+     * @brief Sensörden yeni gelen ölçümleri mevcut global haritaya entegre eden ana fonksiyon.
+     * 
+     * Bu fonksiyon sırasıyla 3 işlemi gerçekleştirir:
+     * 1. Data Association (Mevcut haritadaki objelerle yeni ölçümleri eşleştirir).
+     * 2. Covariance Intersection (Eşleşen objelerin konum ve hata değerlerini kaynaştırarak günceller).
+     * 3. Map Update (Hiçbir harita objesiyle eşleşmeyen yepyeni ölçümleri haritaya ekler).
+     * 
+     * @param incoming_measurements Lidar'dan (laser_detection) yeni tespit edilen objeler
+     */
     void processMeasurements(const std::vector<TrackedObject>& incoming_measurements)
     {
         // 1. VERİ İLİŞKİLENDİRME (Data Association)
@@ -64,6 +89,10 @@ public:
         publishMarkers();
     }
 
+    /**
+     * @brief Global haritadaki (map_objects_) objeleri RViz'de gösterebilmek için 
+     * silindir (CYLINDER) tipli 3D Marker objelerine dönüştürüp yayınlar.
+     */
     void publishMarkers()
     {
         visualization_msgs::msg::MarkerArray marker_array;
@@ -98,6 +127,15 @@ public:
         marker_pub_->publish(marker_array);
     }
 
+    /**
+     * @brief /detected_obstacles topiğinden veri geldiğinde tetiklenen callback fonksiyonu.
+     * 
+     * Gelen ROS mesaj tipindeki (TrackedObjectArray) verileri ayrıştırarak
+     * matematik kütüphanemiz olan Eigen matris formatına (TrackedObject) çevirir 
+     * ve işlenmesi için processMeasurements fonksiyonuna gönderir.
+     * 
+     * @param msg laser_detection paketinden yayınlanan ROS nesne dizisi mesajı
+     */    
     void obstacle_callback(const
     interfaces::msg::TrackedObjectArray::SharedPtr msg)
     {

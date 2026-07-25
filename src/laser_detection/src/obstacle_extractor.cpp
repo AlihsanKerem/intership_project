@@ -14,15 +14,30 @@ struct Point2D {
     double y;
 };
 
+/**
+ * @class ObstacleExtractor
+ * @brief Lidar (LaserScan) verilerini işleyerek çevredeki engelleri (nesneleri) tespit eden ROS 2 Düğümü.
+ * 
+ * Bu sınıf, /scan topiğini dinler, gelen kutupsal (polar) veriyi kartezyen 
+ * koordinatlara çevirir. Ardından birbirine yakın olan noktaları kümeleyerek (clustering) 
+ * nesneleri tanımlar ve bunların merkezini/kovaryansını hesaplayarak 
+ * /detected_obstacles topiğinde yayınlar.
+ */
+
 class ObstacleExtractor : public rclcpp::Node
 {
 public:
 
+    /**
+     * @brief ObstacleExtractor Constructor Fonksiyonu
+     * 
+     * Publisher ve Subscriber nesnelerini oluşturur. tf2 transformasyonlarını
+     * dinleyebilmek için tf_buffer ve tf_listener başlatılır.
+     */
     ObstacleExtractor() : Node("obstacle_extractor_node")
     {
-        // 1. Subscriber'ı oluşturuyoruz.
-        // /scan topic'ini dinleyecek, tipi LaserScan olacak, kuyruk boyutu 10.
-        // Veri geldiğinde scan_callback fonksiyonunu çalıştıracak.
+        // /scan topic'ini dinliyor, tipi LaserScan, kuyruk boyutu 10
+        // Veri geldiğinde scan_callback fonksiyonunu çalıştıracak
         scan_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>
         (
             "/scan", 
@@ -43,9 +58,19 @@ public:
     }
 
 private:
-        // 2. Callback (Geri Çağırma) Fonksiyonu
-        // Lidar'dan her veri geldiğinde ROS2 otomatik olarak bu fonksiyonu çalıştırır.
 
+       /**
+        * @brief Lidar'dan her yeni veri geldiğinde tetiklenen callback fonksiyonu.
+        * 
+        * Adımlar:
+        * 1. Polar -> Kartezyen dönüşümü yapılır ve noktalar 'odom' frame'ine taşınır.
+        * 2. Mesafe tabanlı basit bir kümeleme (clustering) uygulanır.
+        * 3. Gürültüleri ve devasa objeleri (duvarları) yok etmek için kümeler filtrelenir.
+        * 4. Geçerli kümelerin merkezi ve kovaryansı hesaplanıp yayınlanır.
+        * 
+        * @param msg /scan topiğinden gelen ham Lidar verisi
+        */
+        
         void scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
         {
             // Polar veriyi (r, teta) Kartezyene (x, y) çevirmek
@@ -81,7 +106,10 @@ private:
 
                     geometry_msgs::msg::Point pt_odom;
                     tf2::doTransform(pt_laser, pt_odom, transform_stamped);
-
+                    
+                    // Sınır Filtresi: Robotun merkezinden (odom) x veya y ekseninde 4.5 metreden 
+                    // daha uzakta olan noktaları işlem dışı bırakıyoruz. (Sonsuz veya hatalı ölçümleri engellemek için)
+                    // Bu şuanda ilk çözüm yolu olarak oluşturduğum bir şey daha sonrasında muhtemelen kaldırılacak
                     if (std::abs(pt_odom.x) > 4.5 || std::abs(pt_odom.y) > 4.5) {
                         continue;
                     }
@@ -102,7 +130,9 @@ private:
             std::vector<Point2D> current_cluster;
 
             // İlk noktayı geçiyi kumeye koyuyoruz
-            current_cluster.push_back(valid_points[0]); 
+            current_cluster.push_back(valid_points[0]);
+
+            // KÜMELEME EŞİĞİ (Clustering Threshold)
             // 50 cm. Aralarında 50 cm'den az olan noktalar aynı objedir!
             double threshold = 0.5;
 
@@ -134,9 +164,11 @@ private:
 
             int object_id = 1;
             for (const auto& cluster : clusters) {
-                // Çok küçük kümeleri yok sayıyoruz
+                // GÜRÜLTÜ FİLTRESİ: 5 noktadan daha az olan kümeler sensör gürültüsü kabul edilir
                 if (cluster.size() < 5) continue;
-                // Duvarları da yok sayıyoruz
+                // DUVAR FİLTRESİ: 40 noktadan büyük olan kümeler duvar veya harita sınırı 
+                // kabul edildiği için dinamik nesne listesinden çıkartılır
+                // Bu şuanda ilk çözüm yolu olarak oluşturduğum bir şey daha sonrasında muhtemelen kaldırılacak
                 if (cluster.size() > 40) continue;
 
                 // Merkez hesaplama
@@ -149,6 +181,7 @@ private:
                 double mean_y = sum_y / cluster.size();
 
                 // Kovaryans hesaplama
+                // Nesnenin noktalarının merkez etrafında ne kadar yayıldığını buluyoruz
                 double var_x = 0.0, var_y = 0.0, cov_xy = 0.0;
                 for(const auto& pt : cluster) {
                     var_x += (pt.x - mean_x) * (pt.x - mean_x);

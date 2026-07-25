@@ -1,10 +1,10 @@
 # Paketin Amacı
 Bu paket, robotun Lidar verilerini işleyerek çevresindeki nesneleri algılamasını sağlar. Gelen 2 boyutlu sensör verisini (mesafe ve açı), Kartezyen (x, y) koordinat sistemine dönüştürür ve noktaları birbirine olan uzaklıklarına göre kümeleyerek nesneleri tespit eder. Son olarak, tespit edilen her bir nesnenin merkezini ve konumundaki kovaryans değerlerini hesaplayarak diğer paketlerin kullanması için yayınlar.
 
-# Subscribed Topics (Dinlenen Konular)
+# Subscribed Topics
 * **`/scan`** (`sensor_msgs/msg/LaserScan`): Lidar sensöründen gelen ham mesafe verileri. Node bu veriyi okur ve işler.
 
-# Published Topics (Yayınlanan Konular)
+# Published Topics
 * **`/detected_obstacles`** (`interfaces/msg/TrackedObjectArray`): Lidar taraması sonucunda başarıyla tespit edilen nesnelerin listesi. Her bir nesne kendi id numarası, (x, y) konumu ve kovaryans matrisi ile birlikte yayınlanır.
 
 # Parametreler

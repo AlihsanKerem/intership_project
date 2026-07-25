@@ -9,9 +9,26 @@
 namespace shared_world_model
 {
 
+/**
+     * @class HungarianAlgorithm
+     * @brief O(n^3) karmaşıklığında çalışan ve Atama Problemini (Assignment Problem) 
+     * çözen optimizasyon algoritması. 
+     * 
+     * Veri ilişkilendirme (Data Association) adımında, haritadaki objeler ile 
+     * sensörden gelen ölçümleri minimum maliyetle (en doğru şekilde) eşleştirmek için kullanılır.
+     */
 class HungarianAlgorithm
 {
 public:
+    /**
+     * @brief Verilen cost matrixine göre en uygun eşleştirmeyi bulur.
+     * 
+     * @param DistMatrix Cost Matrix (Örn: Objeler arasındaki Mahalanobis uzaklıkları)
+     * @param Assignment Çıktı (Output) vektörü. Her bir harita objesinin (satır) hangi 
+     *                   sensör ölçümüyle (sütunla) eşleştiğinin indeksini tutar.
+     *                   Eşleşme yoksa -1 değeri alır.
+     * @return double Bulunan eşleştirmenin toplam minimum maliyeti (Total Cost)
+     */
     double Solve(const std::vector<std::vector<double>>& DistMatrix, std::vector<int>& Assignment)
     {
         int nRows = DistMatrix.size();
@@ -21,7 +38,8 @@ public:
         
         int n = std::max(nRows, nCols);
         
-        // 1-indeksli çalışması için dizileri n+1 boyutunda başlatıyoruz
+        // Algoritmanın O(n^3) versiyonu kare matris (n x n) ve 1-indeksli çalışacak 
+        // şekilde tasarlandığı için matrisi ona göre boyutlandırıp dolduruyoruz
         std::vector<std::vector<double>> cost(n + 1, std::vector<double>(n + 1, 0.0));
         for (int i = 0; i < nRows; i++) {
             for (int j = 0; j < nCols; j++) {
@@ -73,6 +91,8 @@ public:
             } while (j0 != 0);
         }
 
+        // Algoritma sonucu elde edilen 1-indeksli atamaları, projede kullanabilmemiz için
+        // standart C++ 0-indeks (0-based) formatına geri çeviriyoruz
         Assignment.assign(nRows, -1);
         double total_cost = 0;
         

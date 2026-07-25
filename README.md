@@ -31,6 +31,7 @@ internship_project
 * [X] Araçların şeklini değiştirmek gerekiyor çünkü ileri geri yapınca düşüyorlar
 * [] Birden fazla araç olmalı ve bu araçlar birbirleri ile ayırt edilebilmeli
 * [X] Visualization marker eklenebilir
+* [] Projedeji ilerlemeye göre algoritmalarada yapılan değişikliklere göre dökümantasyonu güncellemem gerekiyor. Şuanda ilk yaptığım çözüme göre hazırladım ama daha sonrasında SLAM veya 3D Lidar a geçersem ona göre güncellemem gerekiyor.
 ### Düşünülen Algoritma Geliştirmeleri
 * [ ] SLAM Entegrasyonu (Statik Harita vs Dinamik Engeller): Ortamın statik bir haritasını çıkararak eğer ortamda obje varsa bunu static haritadaki duvarlarla kıyaslayarak aha bu objedir demesini sağlamak.
 * [ ] 3D Lidar (Point Cloud) ile Sensör Yükseltmesi: 2D lidarın duvar ve obje algılamadaki problemini 3. boyutu kullanarak çözmeye çalışmak. Bunun için laserscan verisinden pointcloud verisine geçicez.
