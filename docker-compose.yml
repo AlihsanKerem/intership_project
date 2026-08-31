@@ -1,4 +1,3 @@
-
 services:
   internship_project_node:
     build: .
@@ -7,6 +6,8 @@ services:
     volumes:
       - ./src:/project_ws/src
       - ros2_build:/project_ws/build
+      - ./start.sh:/project_ws/start.sh
+      - ./.rviz2:/root/.rviz2
       - ros2_install:/project_ws/install
       - ros2_log:/project_ws/log
     # Host ağı kullanarak ROS 2 DDS iletişimindeki gecikmeleri ve kısıtlamaları önlüyoruz
@@ -21,14 +22,14 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=all
     # Container'ın hemen kapanmaması için sonsuz bir döngüde bekletiyoruz
     command: tail -f /dev/null
-    
+
     deploy:
-       resources:
-         reservations:
-           devices:
-             - driver: nvidia
-               count: 1
-               capabilities: [gpu]
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
 
 volumes:
   ros2_build:
