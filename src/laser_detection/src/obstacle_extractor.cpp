@@ -1,250 +1,319 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <laser_geometry/laser_geometry.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_sensor_msgs/tf2_sensor_msgs.hpp>
+
 #include <vector>
 #include <cmath>
-#include <tf2_ros/transform_listener.h>
-#include <tf2_ros/buffer.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-#include <geometry_msgs/msg/point_stamped.hpp>
-#include "interfaces/msg/tracked_object.hpp"
-#include "interfaces/msg/tracked_object_array.hpp"
+#include <sensor_msgs/point_cloud2_iterator.hpp>
 
-struct Point2D {
-    double x;
-    double y;
-};
+#include <visualization_msgs/msg/marker_array.hpp>
+#include <visualization_msgs/msg/marker.hpp>
 
-/**
- * @class ObstacleExtractor
- * @brief Lidar (LaserScan) verilerini işleyerek çevredeki engelleri (nesneleri) tespit eden ROS 2 Düğümü.
- * 
- * Bu sınıf, /scan topiğini dinler, gelen kutupsal (polar) veriyi kartezyen 
- * koordinatlara çevirir. Ardından birbirine yakın olan noktaları kümeleyerek (clustering) 
- * nesneleri tanımlar ve bunların merkezini/kovaryansını hesaplayarak 
- * /detected_obstacles topiğinde yayınlar.
- */
-
-class ObstacleExtractor : public rclcpp::Node
+class LidarClusterNode : public rclcpp::Node
 {
 public:
-
-    /**
-     * @brief ObstacleExtractor Constructor Fonksiyonu
-     * 
-     * Publisher ve Subscriber nesnelerini oluşturur. tf2 transformasyonlarını
-     * dinleyebilmek için tf_buffer ve tf_listener başlatılır.
-     */
-    ObstacleExtractor() : Node("obstacle_extractor_node")
+    LidarClusterNode() : Node("lidar_cluster_node")
     {
-        // /scan topic'ini dinliyor, tipi LaserScan, kuyruk boyutu 10
-        // Veri geldiğinde scan_callback fonksiyonunu çalıştıracak
-        scan_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>
-        (
-            "/scan", 
-            10,
-            std::bind(&ObstacleExtractor::scan_callback, this, std::placeholders::_1)
-        );
-        obj_pub_ = this->create_publisher<interfaces::msg::TrackedObjectArray>
-        (
-            "/detected_obstacles",
-            10
-        );
         tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+        
+        scan_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
+            "/scan", 10, std::bind(&LidarClusterNode::scan_callback, this, std::placeholders::_1));
 
-        RCLCPP_INFO(this->get_logger(), 
-        "Obstacle Extractor Node baslatildi. ");
+        cluster_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/clustered_points", 10);
 
+        marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/obstacle_markers", 10);
     }
 
 private:
+     struct Point {
+        float x;
+        float y;
+    };
+        struct Obstacle {
+        Point center;      // Ağırlık merkezi (noktaların ortalaması)
+        Point box_center;  // Kutunun geometrik merkezi
+        double size_x;     // Kutunun X genişliği
+        double size_y;     // Kutunun Y derinliği
+    };
 
-       /**
-        * @brief Lidar'dan her yeni veri geldiğinde tetiklenen callback fonksiyonu.
-        * 
-        * Adımlar:
-        * 1. Polar -> Kartezyen dönüşümü yapılır ve noktalar 'odom' frame'ine taşınır.
-        * 2. Mesafe tabanlı basit bir kümeleme (clustering) uygulanır.
-        * 3. Gürültüleri ve devasa objeleri (duvarları) yok etmek için kümeler filtrelenir.
-        * 4. Geçerli kümelerin merkezi ve kovaryansı hesaplanıp yayınlanır.
-        * 
-        * @param msg /scan topiğinden gelen ham Lidar verisi
-        */
-        
-        void scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
-        {
-            // Polar veriyi (r, teta) Kartezyene (x, y) çevirmek
-            std::vector<Point2D> valid_points;
-            geometry_msgs::msg::TransformStamped transform_stamped;
-            try {
-                transform_stamped = tf_buffer_->lookupTransform(
-                    "odom", msg->header.frame_id,
-                    msg->header.stamp,
-                    rclcpp::Duration::from_seconds(0.05)
-                );
-            } catch (const tf2::TransformException & ex) {
-                return;
-            }
-            double angle = msg->angle_min;
-
-            for (size_t i = 0; i < msg->ranges.size(); i++) {
-                double r = msg->ranges[i];
-
-                // Geçersiz verileri engelliyoruz
-                if (std::isinf(r) || std::isnan(r) ||
-                    r < msg->range_min || r > 5.0) 
-                    {
-                        angle += msg->angle_increment;
-                        continue;
-                    }
-
-                    // Formül: x = r * cos(aci), y = r * sin(aci)
-                    geometry_msgs::msg::Point pt_laser;
-                    pt_laser.x = r * std::cos(angle);
-                    pt_laser.y = r * std::sin(angle);
-                    pt_laser.z = 0.0;
-
-                    geometry_msgs::msg::Point pt_odom;
-                    tf2::doTransform(pt_laser, pt_odom, transform_stamped);
-                    
-                    // Sınır Filtresi: Robotun merkezinden (odom) x veya y ekseninde 4.5 metreden 
-                    // daha uzakta olan noktaları işlem dışı bırakıyoruz. (Sonsuz veya hatalı ölçümleri engellemek için)
-                    // Bu şuanda ilk çözüm yolu olarak oluşturduğum bir şey daha sonrasında muhtemelen kaldırılacak
-                    if (std::abs(pt_odom.x) > 4.5 || std::abs(pt_odom.y) > 4.5) {
-                        continue;
-                    }
-
-                    Point2D pt;
-                    pt.x = pt_odom.x;
-                    pt.y = pt_odom.y;
-                    valid_points.push_back(pt);
-
-                    // Açıyı bir sonraki nokta için artır
-                    angle += msg->angle_increment;
-            }
-
-            // Eger hic gecerli nokta yoksa fonksiyonu sonlandır
-            if (valid_points.empty()) return;
-
-            std::vector<std::vector<Point2D>> clusters;
-            std::vector<Point2D> current_cluster;
-
-            // İlk noktayı geçiyi kumeye koyuyoruz
-            current_cluster.push_back(valid_points[0]);
-
-            // KÜMELEME EŞİĞİ (Clustering Threshold)
-            // 50 cm. Aralarında 50 cm'den az olan noktalar aynı objedir!
-            double threshold = 0.5;
-
-            for (size_t i = 1; i < valid_points.size(); i++ ) {
-                // Şimdiki nokta ile bir önceki nokta arasındaki uzaklığı (hipotenüs) hesaplıyoruz
-                double dx = valid_points[i].x - valid_points[i-1].x;
-                double dy = valid_points[i].y - valid_points[i-1].y;
-                double distance = std::sqrt(dx*dx + dy*dy);
-
-                if (distance < threshold) {
-                    current_cluster.push_back(valid_points[i]);
-                }
-                else {
-                    // Eski objeyi listeye kaydediyor
-                    clusters.push_back(current_cluster);
-                    // Geçici kümeyi temizliyor
-                    current_cluster.clear();
-                    // Yeni objenin ilk noktasını ekliyoruz
-                    current_cluster.push_back(valid_points[i]);
-                }
-            }
-
-            // Döngü bittikten sonra elimizde kalan son objeyi de ekliyoruz
-            clusters.push_back(current_cluster);
-
-            interfaces::msg::TrackedObjectArray msg_array;
-            msg_array.header.stamp = this->now();
-            msg_array.header.frame_id = "odom";
-
-            int object_id = 1;
-            for (const auto& cluster : clusters) {
-                // GÜRÜLTÜ FİLTRESİ: 5 noktadan daha az olan kümeler sensör gürültüsü kabul edilir
-                if (cluster.size() < 5) continue;
-                // DUVAR FİLTRESİ: 40 noktadan büyük olan kümeler duvar veya harita sınırı 
-                // kabul edildiği için dinamik nesne listesinden çıkartılır
-                // Bu şuanda ilk çözüm yolu olarak oluşturduğum bir şey daha sonrasında muhtemelen kaldırılacak
-                if (cluster.size() > 40) continue;
-
-                // Merkez hesaplama
-                double sum_x = 0, sum_y = 0;
-                for (const auto& pt : cluster) {
-                    sum_x += pt.x;
-                    sum_y += pt.y;
-                }
-                double mean_x = sum_x / cluster.size();
-                double mean_y = sum_y / cluster.size();
-
-                // Kovaryans hesaplama
-                // Nesnenin noktalarının merkez etrafında ne kadar yayıldığını buluyoruz
-                double var_x = 0.0, var_y = 0.0, cov_xy = 0.0;
-                for(const auto& pt : cluster) {
-                    var_x += (pt.x - mean_x) * (pt.x - mean_x);
-                    var_y += (pt.y - mean_y) * (pt.y - mean_y);
-                    cov_xy += (pt.x - mean_x) * (pt.y - mean_y);
-                }
-
-                double N = cluster.size();
-                var_x /= (N - 1);
-                var_y /= (N - 1);
-                cov_xy /= (N - 1);
-
-                var_x += 0.01;
-                var_y += 0.01;
-
-                /* RCLCPP_INFO(this->get_logger(),
-                    "Obje %d -> Merkez(X: %.2f, Y: %.2f) | Nokta Sayisi: %zu | VarX: %.4f, VarY: %.4f", 
-                    object_id, mean_x, mean_y, cluster.size(), var_x, var_y);
-                */
-
-                interfaces::msg::TrackedObject obj_msg;
-                obj_msg.id = object_id;
-                obj_msg.state[0] = mean_x;
-                obj_msg.state[1] = mean_y;
-                obj_msg.covariance[0] = var_x;   // Matrisin [0,0] elemanı
-                obj_msg.covariance[1] = cov_xy;  // Matrisin [0,1] elemanı
-                obj_msg.covariance[2] = cov_xy;  // Matrisin [1,0] elemanı
-                obj_msg.covariance[3] = var_y;   // Matrisin [1,1] elemanı
-
-                msg_array.objects.push_back(obj_msg);
-
-                object_id++;
-            }
-            
+    // Kümeleme Parametreleri
+    const double cluster_tolerance_ = 0.40; // 40 cm: İki nokta arasındaki mesafe bundan büyükse yeni engel kabul edilir.
+    const size_t min_cluster_size_ = 5;    // En az 4 nokta: 1-2 noktalık lazer gürültülerini (noise) elemek için.
+    const size_t max_cluster_size_ = 200;    // Duvar filtresi 1: Çok fazla noktalı büyük yapıları at
+    const double max_cluster_length_ = 2.0; // Duvar filtresi 2: Boyu 2.0 metreden uzun olanları at
 
 
-
-            RCLCPP_INFO(this->get_logger(),
-            "Lidardan veri geldi. Toplam nokta sayisi: %zu", msg->ranges.size());
-
-            RCLCPP_INFO(this->get_logger(),
-            "Lidar taranmasi bitti. %d adet obje bulundu!", (object_id-1));
-            obj_pub_->publish(msg_array);
-
+    void scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr scan_msg)
+    {
+        // Zaman senkronizasyonu: TF ağacında odom -> laser_frame dönüşümü mevcut mu?
+        if (!tf_buffer_->canTransform("odom", scan_msg->header.frame_id, 
+                                      scan_msg->header.stamp, rclcpp::Duration::from_seconds(0.1))) {
+            RCLCPP_WARN(this->get_logger(), "TF dönüşümü henüz hazır değil.");
+            return;
         }
-        
-        //Subscribe olunan topic burada tanımlanıyor
-        rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
-        rclcpp::Publisher<interfaces::msg::TrackedObjectArray>::SharedPtr obj_pub_;
-        std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
-        std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+
+        // Polar veriyi Cartesian PointCloud2'ye çevirme
+        sensor_msgs::msg::PointCloud2 cloud_msg;
+        projector_.projectLaser(*scan_msg, cloud_msg);
+
+        // PointCloud2'yi tf2::doTransform ile odom frame'ine taşıma
+        sensor_msgs::msg::PointCloud2 cloud_odom;
+        try {
+            auto transform_stamped = tf_buffer_->lookupTransform(
+                "odom", scan_msg->header.frame_id, scan_msg->header.stamp);
+            
+            tf2::doTransform(cloud_msg, cloud_odom, transform_stamped);
+        } 
+        catch (const tf2::TransformException & ex) {
+            RCLCPP_ERROR(this->get_logger(), "TF Hatası: %s", ex.what());
+            return;
+        }
+
+        // Kümeleme
+        auto clusters = cluster_points(cloud_odom);
+        RCLCPP_INFO(this->get_logger(), "Tespit edilen engel (küme) sayısı: %zu", clusters.size());
+
+        // Renkli olarak yayınlama
+        publish_clusters(clusters, scan_msg->header);
+
+        // Marker olarak yayınlama
+        auto obstacles = extract_obstacles(clusters);
+        publish_markers(obstacles, scan_msg->header);
+
+
+
+    }
+
+    std::vector<std::vector<Point>> cluster_points(const sensor_msgs::msg::PointCloud2 & cloud_msg)
+    {
+        std::vector<std::vector<Point>> clusters;
+        std::vector<Point> current_cluster;
+        // PointCloud2 içerisindeki "x" ve "y" alanlarını okuyacak iterator'lar
+        sensor_msgs::PointCloud2ConstIterator<float> iter_x(cloud_msg, "x");
+        sensor_msgs::PointCloud2ConstIterator<float> iter_y(cloud_msg, "y");
+        for (; iter_x != iter_x.end(); ++iter_x, ++iter_y) {
+            // NaN veya geçersiz değerleri kontrol et
+            if (std::isnan(*iter_x) || std::isnan(*iter_y)) {
+                continue;
+            }
+            Point current_point{*iter_x, *iter_y};
+            if (current_cluster.empty()) {
+                current_cluster.push_back(current_point);
+            } else {
+                Point last_point = current_cluster.back();
+                // İki ardışık nokta arasındaki Öklid mesafesi: sqrt((x2-x1)^2 + (y2-y1)^2)
+                double distance = std::hypot(current_point.x - last_point.x, current_point.y - last_point.y);
+                if (distance <= cluster_tolerance_) {
+                    // Mesafe küçük: Aynı engelin devamı, mevcut kümeye ekle
+                    current_cluster.push_back(current_point);
+                } else {
+                    // Mesafe büyük: Engel bitti! Eski kümeyi kaydet ve yenisini başlat
+                    if (is_valid_cluster(current_cluster)) {
+                        clusters.push_back(current_cluster);
+                    }
+                    current_cluster.clear();
+                    current_cluster.push_back(current_point);
+                }
+            }
+        }
+        // Döngü bittiğinde elde kalan son kümeyi de kontrol edip ekle
+        if (is_valid_cluster(current_cluster)) {
+            clusters.push_back(current_cluster);
+        }
+        return clusters;
+    }
+
+    bool is_valid_cluster(const std::vector<Point> & cluster)
+    {
+        // 1. Min / Max nokta sayısı kontrolü
+        if (cluster.size() < min_cluster_size_ || cluster.size() > max_cluster_size_) {
+            return false;
+        }
+        // 2. Kümenin boyutu / genişliği kontrolü (İlk nokta ile son nokta arasındaki mesafe)
+        double length = std::hypot(cluster.back().x - cluster.front().x, 
+                                   cluster.back().y - cluster.front().y);
+        if (length > max_cluster_length_) {
+            return false; // Çok uzun bir nesne (büyük ihtimalle duvar)
+        }
+        return true;
+    }
+
+    std::vector<Obstacle> extract_obstacles(const std::vector<std::vector<Point>> & clusters)
+    {
+        std::vector<Obstacle> obstacles;
+        for (const auto & cluster : clusters) {
+            if (cluster.empty()) continue;
+            float sum_x = 0.0f, sum_y = 0.0f;
+            float min_x = cluster[0].x, max_x = cluster[0].x;
+            float min_y = cluster[0].y, max_y = cluster[0].y;
+            for (const auto & pt : cluster) {
+                sum_x += pt.x;
+                sum_y += pt.y;
+                min_x = std::min(min_x, pt.x);
+                max_x = std::max(max_x, pt.x);
+                min_y = std::min(min_y, pt.y);
+                max_y = std::max(max_y, pt.y);
+            }
+            Obstacle obs;
+            // 1. Ortalama Merkez
+            obs.center.x = sum_x / cluster.size();
+            obs.center.y = sum_y / cluster.size();
+            // 2. Kutu Boyutları (Çok ince çizgi olmaması için min 0.1m pay veriyoruz)
+            obs.size_x = std::max(0.1f, max_x - min_x);
+            obs.size_y = std::max(0.1f, max_y - min_y);
+            // 3. Kutu Merkezi
+            obs.box_center.x = (min_x + max_x) / 2.0f;
+            obs.box_center.y = (min_y + max_y) / 2.0f;
+            obstacles.push_back(obs);
+        }
+        return obstacles;
+    }
+
+    void publish_clusters(const std::vector<std::vector<Point>> & clusters, const std_msgs::msg::Header & header)
+    {
+        if (clusters.empty()) {
+            return;
+        }
+        // 1. Toplam nokta sayısını hesapla
+        size_t total_points = 0;
+        for (const auto & cluster : clusters) {
+            total_points += cluster.size();
+        }
+        // 2. PointCloud2 mesajını hazırla
+        sensor_msgs::msg::PointCloud2 cloud_msg;
+        cloud_msg.header = header;
+        cloud_msg.header.frame_id = "odom"; // odom frame'inde yayınlıyoruz
+        // 3. Modifier ile x, y, z ve rgb alanlarını ekle
+        sensor_msgs::PointCloud2Modifier modifier(cloud_msg);
+        modifier.setPointCloud2FieldsByString(2, "xyz", "rgb");
+        modifier.resize(total_points);
+        // 4. Iterator'ları tanımla
+        sensor_msgs::PointCloud2Iterator<float> iter_x(cloud_msg, "x");
+        sensor_msgs::PointCloud2Iterator<float> iter_y(cloud_msg, "y");
+        sensor_msgs::PointCloud2Iterator<float> iter_z(cloud_msg, "z");
+        sensor_msgs::PointCloud2Iterator<uint8_t> iter_r(cloud_msg, "r");
+        sensor_msgs::PointCloud2Iterator<uint8_t> iter_g(cloud_msg, "g");
+        sensor_msgs::PointCloud2Iterator<uint8_t> iter_b(cloud_msg, "b");
+        // Her küme için farklı bir renk paleti (RGB)
+        const std::vector<std::tuple<uint8_t, uint8_t, uint8_t>> colors = {
+            {255, 0, 0},     // Kırmızı
+            {0, 255, 0},     // Yeşil
+            {0, 0, 255},     // Mavi
+            {255, 255, 0},   // Sarı
+            {255, 0, 255},   // Magenta (Pembe)
+            {0, 255, 255},   // Cyan (Camgöbeği)
+            {255, 128, 0},   // Turuncu
+            {128, 0, 255}    // Mor
+        };
+        // 5. Her kümeyi ayrı renkle mesajın içine yaz
+        for (size_t cluster_idx = 0; cluster_idx < clusters.size(); ++cluster_idx) {
+            auto [r, g, b] = colors[cluster_idx % colors.size()];
+            for (const auto & pt : clusters[cluster_idx]) {
+                *iter_x = pt.x;
+                *iter_y = pt.y;
+                *iter_z = 0.0f; // 2D lidar olduğu için Z = 0
+                *iter_r = r;
+                *iter_g = g;
+                *iter_b = b;
+                ++iter_x; ++iter_y; ++iter_z;
+                ++iter_r; ++iter_g; ++iter_b;
+            }
+        }
+        // 6. RViz için yayınla
+        cluster_pub_->publish(cloud_msg);
+    }
+
+    void publish_markers(const std::vector<Obstacle> & obstacles, const std_msgs::msg::Header & header)
+    {
+        visualization_msgs::msg::MarkerArray marker_array;
+        int id = 0;
+        for (size_t i = 0; i < obstacles.size(); ++i) {
+            const auto & obs = obstacles[i];
+            // 1. Sınırlayıcı Kutu (CUBE)
+            visualization_msgs::msg::Marker box_marker;
+            box_marker.header = header;
+            box_marker.header.frame_id = "odom";
+            box_marker.ns = "obstacle_boxes";
+            box_marker.id = id++;
+            box_marker.type = visualization_msgs::msg::Marker::CUBE;
+            box_marker.action = visualization_msgs::msg::Marker::ADD;
+            box_marker.pose.position.x = obs.box_center.x;
+            box_marker.pose.position.y = obs.box_center.y;
+            box_marker.pose.position.z = 0.25; // Yerden biraz yükseltiyoruz
+            box_marker.scale.x = obs.size_x;
+            box_marker.scale.y = obs.size_y;
+            box_marker.scale.z = 0.5; // Kutu yüksekliği
+            box_marker.color.r = 0.0f;
+            box_marker.color.g = 1.0f;
+            box_marker.color.b = 0.0f;
+            box_marker.color.a = 0.35f; // Yarı saydam yeşil
+            box_marker.lifetime = rclcpp::Duration::from_seconds(0.15);
+            marker_array.markers.push_back(box_marker);
+            // 2. Merkez Noktası (SPHERE)
+            visualization_msgs::msg::Marker sphere_marker;
+            sphere_marker.header = header;
+            sphere_marker.header.frame_id = "odom";
+            sphere_marker.ns = "obstacle_centers";
+            sphere_marker.id = id++;
+            sphere_marker.type = visualization_msgs::msg::Marker::SPHERE;
+            sphere_marker.action = visualization_msgs::msg::Marker::ADD;
+            sphere_marker.pose.position.x = obs.center.x;
+            sphere_marker.pose.position.y = obs.center.y;
+            sphere_marker.pose.position.z = 0.5;
+            sphere_marker.scale.x = 0.15;
+            sphere_marker.scale.y = 0.15;
+            sphere_marker.scale.z = 0.15;
+            sphere_marker.color.r = 1.0f;
+            sphere_marker.color.g = 0.0f;
+            sphere_marker.color.b = 0.0f;
+            sphere_marker.color.a = 1.0f; // Parlak kırmızı
+            sphere_marker.lifetime = rclcpp::Duration::from_seconds(0.15);
+            marker_array.markers.push_back(sphere_marker);
+            // 3. Bilgi Yazısı (TEXT)
+            visualization_msgs::msg::Marker text_marker;
+            text_marker.header = header;
+            text_marker.header.frame_id = "odom";
+            text_marker.ns = "obstacle_labels";
+            text_marker.id = id++;
+            text_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+            text_marker.action = visualization_msgs::msg::Marker::ADD;
+            text_marker.pose.position.x = obs.center.x;
+            text_marker.pose.position.y = obs.center.y;
+            text_marker.pose.position.z = 0.8;
+            text_marker.scale.z = 0.25; // Yazı boyutu
+            text_marker.text = "ID: " + std::to_string(i + 1);
+            text_marker.color.r = 1.0f;
+            text_marker.color.g = 1.0f;
+            text_marker.color.b = 1.0f;
+            text_marker.color.a = 1.0f; // Beyaz
+            text_marker.lifetime = rclcpp::Duration::from_seconds(0.15);
+            marker_array.markers.push_back(text_marker);
+        }
+        marker_pub_->publish(marker_array);
+    }
+
+
+    rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
+    laser_geometry::LaserProjection projector_;
+    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cluster_pub_;
+
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
+
 };
 
-// Main
-int main(int argc, char * argv[])
+int main(int argc, char ** argv)
 {
-    // ROS2'yi başlatır
     rclcpp::init(argc, argv);
-
-    // Bizim oluşturduğumuz Node'u çalıştırır ve sürekli dinlemede kalmasını sağlar (spin)
-    rclcpp::spin(std::make_shared<ObstacleExtractor>());
-
-    // ROS2'yi güvenli şekilde kapatır
+    auto node = std::make_shared<LidarClusterNode>();
+    rclcpp::spin(node);
     rclcpp::shutdown();
     return 0;
 }
