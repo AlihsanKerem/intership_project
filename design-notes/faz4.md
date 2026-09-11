@@ -28,7 +28,13 @@ Birden fazla robotun (örn. `robot_1`, `robot_2`) aynı Gazebo simülasyon ortam
 - RViz üzerinde her iki robotun konumu, TF ağacı ve algıladığı engel marker'ları ortak eksende hatasız görselleştirilir.
 
 ## 5. Sonuç
-- *Geliştirme / Entegrasyon aşamasında* (Multi-robot launch, TF prefix ve topic remap yapılandırması).
+- ✅ **Başarıyla Tamamlandı.**
+  - URDF/Xacro modellerine parametrik `prefix` desteği eklendi.
+  - `spawn_multi_robots.launch.py` ile `robot_1` ve `robot_2` farklı koordinatlarda ve bağımsız namespace'ler altında Gazebo'ya spawn edildi.
+  - Ortak `world` ekseni üzerinden Static TF bağlantıları kuruldu.
+  - `teleop_wasd` düğümüne `robot_name` parametresi eklenerek bağımsız hareket sağlandı.
+  - `laser_detection` paketi `TrackedObjectArray` çıktısı üretecek şekilde güncellendi ve `detect_obstacles.launch.py` ile iki robot için ayrı ayrı çalıştırıldı.
+  - RViz2 üzerinde iki robotun modelleri, Lidar taramaları ve engel marker'ları ortak `world` ekseninde doğrulandı.
 
 ---
 

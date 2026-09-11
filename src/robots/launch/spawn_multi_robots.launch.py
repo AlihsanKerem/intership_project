@@ -45,6 +45,14 @@ def generate_launch_description():
         )
     ])
 
+    # world -> robot_1_odom bağlantısı (x: -1.5, y: 0.0)
+    tf_world_to_robot1 = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        arguments=['-1.5', '0.0', '0', '0', '0', '0', 'world', 'robot_1_odom'],
+        output='screen'
+    )
+
     robot_2_group = GroupAction([
     PushRosNamespace('robot_2'),
     
@@ -70,6 +78,14 @@ def generate_launch_description():
     )
     ])
 
+    # world -> robot_2_odom bağlantısı (x: 0.0, y: 2.0)
+    tf_world_to_robot2 = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        arguments=['0.0', '2.0', '0', '0', '0', '0', 'world', 'robot_2_odom'],
+        output='screen'
+    )
+
     # Gazebo Dünyasını Başlatıcı (test_obstacles.world)
     world_file = os.path.join(pkg_share, 'worlds', 'test_obstacles.world')
     gazebo = IncludeLaunchDescription(
@@ -81,5 +97,7 @@ def generate_launch_description():
     return LaunchDescription([
         gazebo,
         robot_1_group,
-        robot_2_group
+        tf_world_to_robot1,
+        robot_2_group,
+        tf_world_to_robot2
     ])

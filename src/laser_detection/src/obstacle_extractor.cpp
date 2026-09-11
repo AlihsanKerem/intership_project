@@ -13,6 +13,9 @@
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 
+#include <interfaces/msg/tracked_object_array.hpp>
+#include <interfaces/msg/tracked_object.hpp>
+
 class LidarClusterNode : public rclcpp::Node
 {
 public:
@@ -21,12 +24,21 @@ public:
         tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
         
+        // target_frame parametresi (varsayılan: "world")
+        this->declare_parameter<std::string>("target_frame", "world");
+        target_frame_ = this->get_parameter("target_frame").as_string();
+
+        // Başına slash KOYMADAN göreceli topic'ler:
         scan_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
-            "/scan", 10, std::bind(&LidarClusterNode::scan_callback, this, std::placeholders::_1));
+            "scan", 10, std::bind(&LidarClusterNode::scan_callback, this, std::placeholders::_1));
 
-        cluster_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/clustered_points", 10);
+        cluster_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("clustered_points", 10);
 
-        marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/obstacle_markers", 10);
+        marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("obstacle_markers", 10);
+
+        // Ortak Beyin için TrackedObjectArray publisher'ı
+        tracked_obj_pub_ = this->create_publisher<interfaces::msg::TrackedObjectArray>("detected_obstacles", 10);
+        RCLCPP_INFO(this->get_logger(), "Obstacle Extractor Baslatildi! Hedef Frame: %s", target_frame_.c_str());
     }
 
 private:
@@ -51,7 +63,7 @@ private:
     void scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr scan_msg)
     {
         // Zaman senkronizasyonu: TF ağacında odom -> laser_frame dönüşümü mevcut mu?
-        if (!tf_buffer_->canTransform("odom", scan_msg->header.frame_id, 
+        if (!tf_buffer_->canTransform(target_frame_, scan_msg->header.frame_id, 
                                       scan_msg->header.stamp, rclcpp::Duration::from_seconds(0.1))) {
             RCLCPP_WARN(this->get_logger(), "TF dönüşümü henüz hazır değil.");
             return;
@@ -62,12 +74,12 @@ private:
         projector_.projectLaser(*scan_msg, cloud_msg);
 
         // PointCloud2'yi tf2::doTransform ile odom frame'ine taşıma
-        sensor_msgs::msg::PointCloud2 cloud_odom;
+        sensor_msgs::msg::PointCloud2 cloud_transformed;
         try {
             auto transform_stamped = tf_buffer_->lookupTransform(
-                "odom", scan_msg->header.frame_id, scan_msg->header.stamp);
+                target_frame_, scan_msg->header.frame_id, scan_msg->header.stamp);
             
-            tf2::doTransform(cloud_msg, cloud_odom, transform_stamped);
+            tf2::doTransform(cloud_msg, cloud_transformed, transform_stamped);
         } 
         catch (const tf2::TransformException & ex) {
             RCLCPP_ERROR(this->get_logger(), "TF Hatası: %s", ex.what());
@@ -75,15 +87,22 @@ private:
         }
 
         // Kümeleme
-        auto clusters = cluster_points(cloud_odom);
-        RCLCPP_INFO(this->get_logger(), "Tespit edilen engel (küme) sayısı: %zu", clusters.size());
+        auto clusters = cluster_points(cloud_transformed);
+        RCLCPP_INFO(this->get_logger(), "Robot: %s , Tespit edilen engel (küme) sayısı: %zu", this->get_namespace(), clusters.size());
+
+        // Header'ın frame_id'sini target_frame_ ("world") yapalım
+        std_msgs::msg::Header target_header = scan_msg->header;
+        target_header.frame_id = target_frame_;
 
         // Renkli olarak yayınlama
-        publish_clusters(clusters, scan_msg->header);
+        publish_clusters(clusters, target_header);
 
         // Marker olarak yayınlama
         auto obstacles = extract_obstacles(clusters);
-        publish_markers(obstacles, scan_msg->header);
+        publish_markers(obstacles, target_header);
+
+        // Ortak Beyin için TrackedObjectArray yayınlama
+        publish_tracked_objects(obstacles, target_header);
 
 
 
@@ -187,7 +206,7 @@ private:
         // 2. PointCloud2 mesajını hazırla
         sensor_msgs::msg::PointCloud2 cloud_msg;
         cloud_msg.header = header;
-        cloud_msg.header.frame_id = "odom"; // odom frame'inde yayınlıyoruz
+
         // 3. Modifier ile x, y, z ve rgb alanlarını ekle
         sensor_msgs::PointCloud2Modifier modifier(cloud_msg);
         modifier.setPointCloud2FieldsByString(2, "xyz", "rgb");
@@ -237,7 +256,7 @@ private:
             // 1. Sınırlayıcı Kutu (CUBE)
             visualization_msgs::msg::Marker box_marker;
             box_marker.header = header;
-            box_marker.header.frame_id = "odom";
+
             box_marker.ns = "obstacle_boxes";
             box_marker.id = id++;
             box_marker.type = visualization_msgs::msg::Marker::CUBE;
@@ -257,7 +276,7 @@ private:
             // 2. Merkez Noktası (SPHERE)
             visualization_msgs::msg::Marker sphere_marker;
             sphere_marker.header = header;
-            sphere_marker.header.frame_id = "odom";
+
             sphere_marker.ns = "obstacle_centers";
             sphere_marker.id = id++;
             sphere_marker.type = visualization_msgs::msg::Marker::SPHERE;
@@ -277,7 +296,7 @@ private:
             // 3. Bilgi Yazısı (TEXT)
             visualization_msgs::msg::Marker text_marker;
             text_marker.header = header;
-            text_marker.header.frame_id = "odom";
+
             text_marker.ns = "obstacle_labels";
             text_marker.id = id++;
             text_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
@@ -297,6 +316,26 @@ private:
         marker_pub_->publish(marker_array);
     }
 
+    void publish_tracked_objects(const std::vector<Obstacle> & obstacles, const std_msgs::msg::Header & header)
+    {
+        interfaces::msg::TrackedObjectArray array_msg;
+        array_msg.header = header;
+        for (size_t i = 0; i < obstacles.size(); ++i) {
+            interfaces::msg::TrackedObject obj;
+            obj.id = static_cast<int32_t>(i + 1);
+            obj.state[0] = obstacles[i].center.x; // X koordinatı (world)
+            obj.state[1] = obstacles[i].center.y; // Y koordinatı (world)
+            
+            // Başlangıç Kovaryansı (0.05 belirsizlik)
+            obj.covariance[0] = 0.05; obj.covariance[1] = 0.0;
+            obj.covariance[2] = 0.0;  obj.covariance[3] = 0.05;
+            array_msg.objects.push_back(obj);
+        }
+        tracked_obj_pub_->publish(array_msg);
+    }
+
+    std::string target_frame_;
+    rclcpp::Publisher<interfaces::msg::TrackedObjectArray>::SharedPtr tracked_obj_pub_;
 
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
     laser_geometry::LaserProjection projector_;
