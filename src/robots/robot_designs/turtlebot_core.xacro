@@ -7,7 +7,7 @@
     <xacro:property name="wheel_radius" value="0.05"/>
     <xacro:property name="wheel_thickness" value="0.05"/>
 
-    <link name="base_link">
+    <link name="${prefix}base_link">
         <visual>
             <geometry>
                 <box size="${box_length} ${box_width} ${box_height}"/>
@@ -27,7 +27,7 @@
         </inertial>
     </link>
 
-    <link name="left_wheel">
+    <link name="${prefix}left_wheel">
         <visual>
             <geometry>
                 <cylinder radius="${wheel_radius}" length="${wheel_thickness}"/>
@@ -47,14 +47,14 @@
         </inertial>
     </link>
 
-    <joint name="left_wheel_joint" type="continuous">
-        <parent link="base_link"/>
-        <child link="left_wheel"/>
+    <joint name="${prefix}left_wheel_joint" type="continuous">
+        <parent link="${prefix}base_link"/>
+        <child link="${prefix}left_wheel"/>
         <origin xyz="-0.12 0.20 -0.1" rpy="-1.5708 0 0"/>
         <axis xyz="0 0 1"/>
     </joint>
 
-    <link name="right_wheel">
+    <link name="${prefix}right_wheel">
         <visual>
             <geometry>
                 <cylinder radius="${wheel_radius}" length="${wheel_thickness}"/>
@@ -72,14 +72,14 @@
         </inertial>
     </link>
 
-    <joint name="right_wheel_joint" type="continuous">
-        <parent link="base_link"/>
-        <child link="right_wheel"/>
+    <joint name="${prefix}right_wheel_joint" type="continuous">
+        <parent link="${prefix}base_link"/>
+        <child link="${prefix}right_wheel"/>
         <origin xyz="-0.12 -0.20 -0.1" rpy="-1.5708 0 0"/>
         <axis xyz="0 0 1"/>
     </joint>
 
-    <link name="caster_wheel">
+    <link name="${prefix}caster_wheel">
         <visual>
             <geometry>
                 <sphere radius="0.05"/>
@@ -99,13 +99,13 @@
         </inertial>
     </link>
 
-    <joint name="caster_joint" type="fixed">
-        <parent link="base_link"/>
-        <child link="caster_wheel"/>
+    <joint name="${prefix}caster_joint" type="fixed">
+        <parent link="${prefix}base_link"/>
+        <child link="${prefix}caster_wheel"/>
         <origin xyz="0.15 0 -0.1" rpy="0 0 0"/>
     </joint>
 
-    <gazebo reference="caster_wheel">
+    <gazebo reference="${prefix}caster_wheel">
         <mu1>0.0</mu1>
         <mu2>0.0</mu2>
         <material>Gazebo/White</material>

@@ -38,9 +38,22 @@ def getKey(settings):
 class TeleopWASD(Node):
     def __init__(self):
         super().__init__('teleop_wasd')
-        self.publisher_ = self.create_publisher(Twist, 'cmd_vel', 10)
+
+        # 1. robot_name parametresini tanımla
+        self.declare_parameter('robot_name', '')
+        robot_name = self.get_parameter('robot_name').get_parameter_value().string_value
+
+        # 2. Topic adını belirle: eğer robot_name verilmişse '/robot_1/cmd_vel', verilmemişse 'cmd_vel'
+        if robot_name:
+            topic_name = f'/{robot_name}/cmd_vel'
+        else:
+            topic_name = 'cmd_vel'
+
+        self.publisher_ = self.create_publisher(Twist, topic_name, 10)
         self.speed = 0.5
         self.turn = 1.0
+
+        self.get_logger().info(f"Teleop basladi, Topic: {topic_name}")
 
     def run(self):
         settings = termios.tcgetattr(sys.stdin)

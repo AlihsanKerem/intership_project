@@ -1,14 +1,18 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="turtlebot">
 
+    <xacro:arg name="prefix" default=""/>
+    <xacro:property name="prefix" value="$(arg prefix)"/>
+
+
     <xacro:include filename="turtlebot_core.xacro" />
     <xacro:include filename="lidar.xacro" />
 
     <gazebo>
         <plugin name="diff_drive" filename="libgazebo_ros_diff_drive.so">
             
-            <left_joint>left_wheel_joint</left_joint>
-            <right_joint>right_wheel_joint</right_joint>
+            <left_joint>$(arg prefix)left_wheel_joint</left_joint>
+            <right_joint>$(arg prefix)right_wheel_joint</right_joint>
             <wheel_separation>0.34</wheel_separation>
             <wheel_diameter>0.10</wheel_diameter>
 
@@ -20,8 +24,8 @@
             <publish_odom_tf>true</publish_odom_tf>
             <publish_wheel_tf>true</publish_wheel_tf>
             
-            <odometry_frame>odom</odometry_frame>
-            <robot_base_frame>base_link</robot_base_frame>
+            <odometry_frame>$(arg prefix)odom</odometry_frame>
+            <robot_base_frame>$(arg prefix)base_link</robot_base_frame>
 
         </plugin>
     </gazebo>
