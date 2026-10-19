@@ -7,6 +7,7 @@ Panels:
         - /Global Options1
         - /Status1
         - /Robot1_Scan1/Topic1
+        - /Robot2_Scan1
       Splitter Ratio: 0.5
     Tree Height: 502
   - Class: rviz_common/Selection
@@ -264,7 +265,7 @@ Visualization Manager:
       Color Transformer: Intensity
       Decay Time: 0
       Enabled: true
-      Invert Rainbow: false
+      Invert Rainbow: true
       Max Color: 255; 255; 255
       Max Intensity: 0
       Min Color: 0; 0; 0
@@ -273,7 +274,7 @@ Visualization Manager:
       Position Transformer: XYZ
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.009999999776482582
+      Size (m): 0.05000000074505806
       Style: Flat Squares
       Topic:
         Depth: 5
@@ -289,9 +290,7 @@ Visualization Manager:
       Enabled: true
       Name: Robot1_MarkerArray
       Namespaces:
-        obstacle_boxes: true
-        obstacle_centers: true
-        obstacle_labels: true
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -337,9 +336,7 @@ Visualization Manager:
       Enabled: true
       Name: Robot2_MarkerArray
       Namespaces:
-        obstacle_boxes: true
-        obstacle_centers: true
-        obstacle_labels: true
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -427,7 +424,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 10.06572437286377
+      Distance: 12.776266098022461
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1

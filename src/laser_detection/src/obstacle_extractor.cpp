@@ -267,10 +267,20 @@ private:
             box_marker.scale.x = obs.size_x;
             box_marker.scale.y = obs.size_y;
             box_marker.scale.z = 0.5; // Kutu yüksekliği
-            box_marker.color.r = 0.0f;
-            box_marker.color.g = 1.0f;
-            box_marker.color.b = 0.0f;
-            box_marker.color.a = 0.35f; // Yarı saydam yeşil
+
+            // Robot namespace'ine göre renk ayrımı (robot_1: mavi, robot_2: Mavi)
+            std::string ns_str = this->get_namespace();
+            if (ns_str.find("robot_2") != std::string::npos) {
+                box_marker.color.r = 0.0f;
+                box_marker.color.g = 1.0f;
+                box_marker.color.b = 1.0f;
+            } else {
+                box_marker.color.r = 1.0f;
+                box_marker.color.g = 1.0f;
+                box_marker.color.b = 0.0f;
+            }
+            box_marker.color.a = 0.55f;
+            
             box_marker.lifetime = rclcpp::Duration::from_seconds(0.15);
             marker_array.markers.push_back(box_marker);
             // 2. Merkez Noktası (SPHERE)
@@ -305,7 +315,13 @@ private:
             text_marker.pose.position.y = obs.center.y;
             text_marker.pose.position.z = 0.8;
             text_marker.scale.z = 0.25; // Yazı boyutu
-            text_marker.text = "ID: " + std::to_string(i + 1);
+
+            char label_buf[64];
+            std::snprintf(label_buf, sizeof(label_buf), "[%s] X:%.2f, Y:%.2f", 
+                          ns_str.empty() || ns_str == "/" ? "R" : ns_str.substr(1).c_str(), 
+                          obs.center.x, obs.center.y);
+            text_marker.text = std::string(label_buf);
+
             text_marker.color.r = 1.0f;
             text_marker.color.g = 1.0f;
             text_marker.color.b = 1.0f;
